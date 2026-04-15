@@ -1,41 +1,36 @@
 from PIL import Image
 import numpy as np
-from collections import Counter
+from scipy.ndimage import label
 
-img = Image.open('input/stadium_test1.png').convert('RGBA')
+# 대용량 이미지 제한 해제
+Image.MAX_IMAGE_PIXELS = None
+
+img = Image.open('input/stadium_test2.png').convert('RGBA')
 arr = np.array(img)
-alpha = arr[:,:,3]
-mask = alpha > 10
-h, w = mask.shape
-visited = np.zeros_like(mask, dtype=bool)
-components = []
-# 8-connectivity
-neighbors = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
-for y in range(h):
-    for x in range(w):
-        if mask[y,x] and not visited[y,x]:
-            stack = [(y,x)]
-            visited[y,x] = True
-            pixels = []
-            minx=maxx=x
-            miny=maxy=y
-            while stack:
-                cy,cx = stack.pop()
-                pixels.append((cy,cx))
-                if cx < minx: minx = cx
-                if cx > maxx: maxx = cx
-                if cy < miny: miny = cy
-                if cy > maxy: maxy = cy
-                for dy,dx in neighbors:
-                    ny,nx = cy+dy, cx+dx
-                    if 0 <= ny < h and 0 <= nx < w and mask[ny,nx] and not visited[ny,nx]:
-                        visited[ny,nx] = True
-                        stack.append((ny,nx))
-            components.append({
-                'bbox': (minx, miny, maxx, maxy),
-                'count': len(pixels),
-            })
 
-print('components', len(components))
+# 알파 마스크 추출
+alpha = arr[:, :, 3]
+mask = (alpha > 10).astype(np.uint8)
+
+# 8-connectivity 구조 커널
+structure = np.ones((3, 3), dtype=np.int32)
+
+# 연결 컴포넌트 레이블링
+labeled, num_features = label(mask, structure=structure)
+
+print('components', num_features)
+
+# 각 컴포넌트 픽셀 수 + bbox 계산
+components = []
+for comp_id in range(1, num_features + 1):
+    ys, xs = np.where(labeled == comp_id)
+    count = len(ys)
+    bbox = (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max()))
+    components.append({
+        'bbox': bbox,
+        'count': count,
+    })
+
+# 기존 출력 형식 그대로 유지
 for i, comp in enumerate(sorted(components, key=lambda c: c['count'], reverse=True), 1):
     print(i, comp['count'], comp['bbox'])
